@@ -2,4 +2,5 @@
 
 This is Maddie Schoderbek's repository for STAT5605 projects.
 
-This is not a test. 
+This is both a test and not a test.
+git status

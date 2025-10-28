@@ -1,0 +1,133 @@
+---
+title: "ACTIVITY2"
+author: "Madeleine Schoderbek"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+
+## R Markdown
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+
+# Load packages
+library(readxl)
+library(janitor)
+library(tidyverse)
+library(tableone)
+library(flextable)
+```
+
+```{r import}
+library(readxl)
+Cpap <- read_excel("CPAPAdherence_Data_Clean.xlsx")
+head(Cpap)
+
+```
+
+```{r clean}
+# Clean variable names to be consistent
+Cpap <- clean_names(Cpap)
+
+# Convert categorical variables to factors
+Cpap <- Cpap %>%
+  mutate(
+    adherence = factor(adherence, levels = c("Non-adherent", "Adherent")),
+    sex = factor(sex),
+    race = factor(race),
+    ethnicity = factor(ethnicity),
+    education = factor(education)
+  )
+
+# Check structure
+str(Cpap)
+
+```
+
+---
+
+```{r table1}
+# Define variables to include in Table 1
+vars <- c("ethnicity", "education", "race", "age", "sex", "bmi",
+           "ahi", "ess", "mmse", "odsi_bl", "adcs_12m")
+
+# Identify categorical variables
+catVars <- c("ethnicity", "education", "race", "sex")
+
+# Create Table 1
+table1 <- CreateTableOne(vars = vars, strata = "adherence", data = Cpap, test = TRUE)
+
+group_counts <- table(Cpap$adherence)
+nonad_n <- group_counts["Non-adherent"]
+ad_n <- group_counts["Adherent"]
+
+
+
+# Extract counts for group headers
+
+group_counts <- table(Cpap$adherence)
+nonad_n <- group_counts["Non-adherent"]
+ad_n <- group_counts["Adherent"]
+
+table1_df <- as.data.frame(print(table1, showAllLevels = TRUE, quote = FALSE,
+noSpaces = TRUE, test = TRUE, smd = TRUE))
+
+# Rename columns for clarity
+
+colnames(table1_df) <- c("Characteristic", "Total",
+paste0("Non-adherent (n = ", nonad_n, ")"),
+paste0("Adherent (n = ", ad_n, ")"),
+"Effect Size", "p-value")
+
+add_ci <- function(x) {
+m <- mean(x, na.rm = TRUE)
+se <- sd(x, na.rm = TRUE) / sqrt(sum(!is.na(x)))
+ci <- qt(0.975, df = sum(!is.na(x)) - 1) * se
+c(lower = m - ci, upper = m + ci)
+}
+
+ci_table <- Cpap %>%
+group_by(adherence) %>%
+summarise(across(c(age, bmi, ahi, ess, mmse, odsi_bl, adcs_12m),
+~paste0(round(mean(.x, na.rm = TRUE), 2),
+" [", round(add_ci(.x)[1], 2), ", ",
+round(add_ci(.x)[2], 2), "]")))
+ci_table
+
+
+# Print Table 1 with p-values and effect sizes
+print(table1, showAllLevels = TRUE, quote = FALSE, nospaces = TRUE, test = TRUE, smd = TRUE)
+
+ft <- flextable(table1_df)
+ft <- set_caption(ft, caption = "Table 1. Demographic and Clinical Characteristics (n = 174)")
+ft <- autofit(ft)
+ft <- fontsize(ft, size = 10)
+ft <- align(ft, align = "center", part = "all")
+ft <- bold(ft, j = 1, part = "body")  # bold variable names
+ft
+```
+
+> **Footnotes:**  
+> Continuous variables were compared using *t*-tests or Wilcoxon rank-sum tests, as appropriate.  
+> Categorical variables were compared using Chi-squared or Fisher’s exact tests.  
+> Effect sizes are presented as standardized mean differences (SMDs).  
+> 95% confidence intervals are shown where applicable.
+
+**Example of a significant result (p < 0.05):**
+
+> Participants who were adherent to CPAP treatment had a significantly lower Epworth Sleepiness Scale (ESS) score compared to non-adherent participants (p = 0.02).  
+> This suggests that people who consistently used CPAP reported feeling less sleepy during the day.
+
+**Example of a non-significant result (p > 0.05):**
+
+> There was no significant difference in age between adherent and non-adherent participants (p = 0.45).  
+> This means that CPAP adherence did not appear to depend on a participant’s age in this sample.
+
+
+
+
+
+
+
+
+

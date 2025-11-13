@@ -11,7 +11,7 @@ output: word_document
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 
 # Load packages
-library(readxl)
+library(openxlsx)
 library(janitor)
 library(tidyverse)
 library(tableone)
@@ -23,8 +23,8 @@ library(table1)
 ```
 
 ```{r import}
-library(readxl)
-Cpap <- read_excel("CPAPAdherence_Data_Clean.xlsx")
+library(openxlsx)
+Cpap <- read.xlsx("CPAPAdherence_Data_Clean.xlsx")
 head(Cpap)
 
 ```

@@ -1,0 +1,85 @@
+---
+title: "Untitled"
+author: "Madeleine Schoderbek"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl)
+library(dplyr)
+library(tableone)
+library(janitor)
+library(kableExtra)
+```
+
+
+## Import and Inspect Data
+```{r import}
+# Make sure the file is in your project folder
+Cpap <- read_excel("CPAPAdherence_Data_Clean.xlsx") %>%
+  clean_names()
+
+# Preview data
+head(Cpap)
+```
+
+
+## Format Variables
+```{r format}
+# Convert categorical variables to factors
+Cpap <- Cpap %>%
+  mutate(
+    ethnicity = as.factor(ethnicity),
+    education = as.factor(education),
+    race = as.factor(race),
+    sex = as.factor(sex),
+    adherence = as.factor(adherence)
+  )
+
+# Check data structure
+str(Cpap)
+
+```
+
+## Table 1: Demographic and Clinical Characteristics (n=174)
+
+```{r table1}
+
+
+Cpap <- as.data.frame(Cpap)
+
+
+# Define variables
+vars <- c("ethnicity", "education", "race", "age", "sex", 
+           "bmi", "ahi", "ess", "mmse", 
+           "odsi_bl","odsi_6m", "adcs_12m", "avg_daily_cpap")
+
+# Categorical variables
+catVars <- c("ethnicity", "education", "race", "sex")
+
+
+
+# Create Table 1 stratified by adherence
+table1 <- CreateTableOne(vars = vars,
+                         strata = "adherence",
+                         data = data,
+                         factorVars = catVars,
+                         includeNA = TRUE)
+
+# Print with p-values and effect sizes
+table1_print <- print(table1,
+                      showAllLevels = TRUE,
+                      quote = FALSE,
+                      noSpaces = TRUE,
+                      test = TRUE,
+                      smd = TRUE)
+
+# Display formatted table
+kbl(table1_print, caption = "Table 1: Demographic and Clinical Characteristics (n = 174)") %>%
+  kable_classic(full_width = FALSE)
+
+```

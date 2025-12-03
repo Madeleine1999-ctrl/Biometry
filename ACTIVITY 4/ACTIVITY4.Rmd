@@ -1,0 +1,582 @@
+---
+title: "ACTIVITY4~"
+author: "Madeleine Schoderbek"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+#QUESTION 1
+A)
+```{r}
+library(readxl)
+library(openxlsx)
+
+rip <- read_excel("SuicideRisk_Data-2.xlsx")
+
+library(tidyr)
+library(readxl)
+library(broom)
+library(car)            
+library(performance)    
+library(ggplot2)
+library(kableExtra)
+library(dplyr)
+library(pROC)
+library(ResourceSelection)
+library(pscl)
+
+
+sapply(rip[, c("GENDER", "RACE", "ETHNICITY", "INCOME")], function(x) length(unique(x)))
+
+
+rip <- rip %>%
+  mutate(
+    GENDER = factor(GENDER, levels = c("Female", "Male")),
+    RACE = factor(RACE, levels = c("White/Caucasian", "Other")),
+    ETHNICITY = factor(ETHNICITY, levels = c("Not Hispanic/Latino", "Hispanic/Latino")),
+    INCOME = factor(INCOME),
+    
+    across(starts_with("ACES___"), ~factor(.x, levels = c(0, 1), labels = c("No", "Yes"))),
+    
+    HX_SUICIDE = factor(HX_SUICIDE, levels = c(0,1), labels = c("No", "Yes"))
+  )
+
+
+   str(rip)
+   
+   
+
+```
+
+```{r}
+
+
+model_demo <- lm(
+  SABCS_TOTAL_SUM ~ AGE + GENDER + RACE + ETHNICITY + INCOME,
+                 data = rip
+  )
+
+sabcs_model <- lm(SABCS_TOTAL_SUM ~ AGE + GENDER + RACE + ETHNICITY + INCOME, data = rip)
+summary(sabcs_model)
+
+
+plot(sabcs_model$fitted.values, resid(sabcs_model),
+     xlab = "Fitted Values",
+     ylab = "Residuals",
+     main = "Residuals vs Fitted Values",
+     pch = 21,
+     bg = "orange2",
+     col = "black")    
+
+points(x = sabcs_model$fitted.values)
+
+abline(h = 0, col = "red", lty = 2)
+
+
+
+
+library(car)
+vif(sabcs_model)  
+
+par(mfrow = c(1, 2))
+plot(sabcs_model)
+
+```
+
+From the results comparing SABCS to demographic variables, the model is statistically significant but only relying on demographics to determine suicide risk would not be reliable. 
+A few of the individuals have a much higher risk, but most individuals have a low SABCS score. The model represents that age and income are the more significant than the other factors when predicting suicide (higher age, higher income, lower risk of suicide). In sum, other factors would be a better predictor for suicide risk such as depression. 
+
+
+
+
+
+
+
+B)
+
+```{r}
+ 
+model_depression <- lm(SABCS_TOTAL_SUM ~ CESDR_TOTAL_SUM, data = rip)
+
+
+summary(model_depression)
+
+
+plot(rip$CESDR_TOTAL_SUM, rip$SABCS_TOTAL_SUM,
+     xlab = "CESD-R Total Score (Depression)",
+     ylab = "SABCS Total Score (Suicidal Risk)",
+     main = "Suicidal Risk vs Depression",
+     pch = 21,        
+     bg = "orange2",
+     col = "black")   
+
+
+abline(model_depression, col = "blue", lwd = 2)
+
+
+abline(h = mean(rip$SABCS_TOTAL_SUM, na.rm = TRUE), col = "red", lty = 2)
+
+par(mfrow=c(1,2))
+plot(model_depression)
+
+```
+
+This model shows that higher depression scores are associated with higher suicide rates. The relationship between the two is statistically significant, being that 35% of the variation in suicide risk scores is caused by the depression scores. 
+
+
+
+C) 
+
+```{r}
+
+sapply(rip[, paste0("ACES___", 1:10)], function(x) table(x))
+
+
+aces_vars <- paste0("ACES___", 1:10)
+rip[, aces_vars] <- lapply(rip[, aces_vars], function(x) {
+  as.numeric(factor (x, levels = c("No", "Yes"), labels = c (0,1)))
+})
+
+sapply(rip[, aces_vars], table)
+
+model_aces <- lm(SABCS_TOTAL_SUM ~ ACES___1 + ACES___2 + ACES___3 + ACES___4 + ACES___5 + ACES___6 + ACES___7 + ACES___8 + ACES___9 + ACES___10, data = rip)
+
+
+summary(model_aces)
+
+
+par(mfrow = c(1,1))
+plot(model_aces)
+
+
+
+
+library(car)
+vif(model_aces)
+
+
+plot(rip$ACES___1, rip$SABCS_TOTAL_SUM,
+     xlab = "ACES Item 1 (0 = No, 1 = Yes ",
+     ylab = "SABCS Total Score (Suicidal Risk) ",
+     main = "Suicidal Risk vs ACE Item 1",
+     pch = 21,
+     bg = "orange1",
+     col = "black")
+abline(lm(SABCS_TOTAL_SUM ~ ACES___1, data = rip), col = "blue", lwd = 2)
+abline(h = mean(rip$SABCS_TOTAL_SUM, na.rm = TRUE), col = "red", lty = 2)
+
+
+
+
+```
+From our regressing model showing the effects of the ACES' variables on suicide, our model shows us that ACES 2, 3 and 8 were positively associated with chances of suicide risk and had the highest SABCS scores. ACES 9 had the most negative association with suicidal risk and had the lowest SABCS score. All 4 of these ACE variables were statistically significant and majority of the other ACES were not. Our adjusted R-squared variable shows us that there is only a 13% difference in suicide risk for the ACES variables. 
+
+
+
+D)
+```{r}
+
+
+combined_model <- lm(SABCS_TOTAL_SUM ~ AGE + INCOME + CESDR_TOTAL_SUM + ACES___2 + ACES___3 + ACES___8 + ACES___9 + ETHNICITY, data = rip)
+
+
+summary(combined_model)
+
+
+
+par(mfrow = c(1,1))
+plot(combined_model)
+
+
+library(car)
+vif(combined_model)
+
+
+
+
+
+plot(rip$CESDR_TOTAL_SUM, rip$SABCS_TOTAL_SUM,
+     xlab = "CESD-R Total Score (Depression)",
+     ylab = "SABCS Total Score (Suicidal Risk)",
+     main = "Suicidal Risk vs Depression",
+     pch = 21,
+     bg = "orange2",
+     col = "black")
+
+abline(lm(SABCS_TOTAL_SUM ~ CESDR_TOTAL_SUM, data = rip), col = "blue", lwd = 2)
+abline(h = mean(rip$SABCS_TOTAL_SUM, na.rm = TRUE), col = "red", lty = 2)
+
+```
+Based on the results, we can tell that the depression scores (CESDR_TOTAL_SUM) and ACES 2, 3, 8, 9 are significant indicators of suicide risk. Higher depression scores are associated with ACES 2, 3, and 8. ACES 9 is associated with lower suicide risk. Older age is linked to slightly lower risk, and some income categories (like $51k–$75k) show slight associations with risk. The model can explain about 40% of why suicidal risk is different between people, which is a lot better than just looking at ACEs' or demographics. The model looks okay overall, and the predictors don’t get in each other’s way.
+
+
+E)
+```{r}
+
+rip$SABCS_sqrt <- sqrt(rip$SABCS_TOTAL_SUM)
+
+
+hist(rip$SABCS_sqrt, main="Square Root of SABCS_TOTAL_SUM", xlab="sqrt(SABCS_TOTAL_SUM)")
+ 
+
+model_sqrt <- lm(
+  SABCS_sqrt ~ AGE + INCOME + CESDR_TOTAL_SUM + ACES___2 + ACES___3 + ACES___8 + ACES___9 + ETHNICITY,
+  data = rip
+)
+
+
+summary(model_sqrt)
+
+
+par(mfrow=c(1,2))
+plot(model_sqrt)
+par(mfrow=c(1,1))
+
+
+library(car)
+vif(model_sqrt)
+
+
+plot(rip$ACES___2, rip$SABCS_sqrt,
+     xlab = "ACE Item 2 (0 = No, 1 = Yes)",
+     ylab = "Square Root of SABCS Total Score",
+     main = "Square Root of Suicidal Risk vs ACE Item 2",
+     pch = 21,
+     bg = "lightblue",
+     col = "black")
+
+
+abline(lm(SABCS_sqrt ~ ACES___2, data = rip),
+       col = "blue", lwd = 2)
+
+
+abline(h = mean(rip$SABCS_sqrt, na.rm = TRUE),
+       col = "red", lty = 2)
+```
+Based on the results calculated using the square root of SABCS_TOTAL_SUM, we can see that CESDR (depression) as well as ACES 2,3,8 and 9 are still large indicators of suicide risk. The higher CESDR scores and ACES 2,3, and 8 are related to high suicide risk and 9 is related to low suicide risk. Model checks show that the leftover errors look pretty normal, the relationships are mostly straight, and the predictors aren’t overlapping too much. Overall, this model shows about 39% of the differences in suicidal risk between participants and the transformation helped reduce the influence of extreme values without changing the key findings.
+
+
+F)
+The model from part D shows the SABCS_TOTAL_SUM head on, while part E shows the square root of SABCS_TOTAL_SUM to reduce any influences of extreme values. I believe that the transformed model fit the assumptions of linear regression better because it contains a more even spread and more normal errors. The original model is a bit easier to understand though, being that the numbers match the risk scores directly. In my opinion, I would use the transformed model because it is more reliable from a statistics standpoint and it handles the outliers and skewed data better than the original. 
+
+
+# QUESTION 2
+
+A)
+
+
+```{r}
+
+
+rip$HX_SUICIDE <- ifelse(rip$HX_SUICIDE == "Yes", 1, 0 )
+
+hx_model <- glm(HX_SUICIDE ~ AGE + GENDER + RACE + ETHNICITY + INCOME, 
+                family = binomial, data = rip)
+
+
+summary(hx_model)
+
+
+install.packages("car")
+library(car)
+
+plot(hx_model$fitted.values, 
+     residuals(hx_model, type = "deviance"),
+     xlab = "Fitted Values", ylab = "Deviance Residuals",
+     main = "Residuals vs Fitted")
+abline(h = 0, col = "red")
+
+
+
+vif(hx_model)
+
+
+exp(coef(hx_model))
+
+
+exp(confint(hx_model))
+
+with(hx_model, 1 - deviance/null.deviance)
+
+
+install.packages("ResourceSelection")
+library(ResourceSelection)
+
+
+ggplot(hx_model, aes(x = AGE, y = HX_SUICIDE)) +
+  geom_jitter(height = 0.05, alpha = 0.5) +
+  geom_smooth(method = "glm", method.args = list(family = "binomial")) +
+  theme_minimal()
+```
+When looking at HX_SUICIDE amongst demographic variables, none of the variables indicate a high prediction of history of suicide. Under the income category specifically at 51k- 75k shows weak numbers and may point toward lower history, but it is not statistically significant. For hispanic/latino participants, the scores indicated that they may have higher odds of a history, but are not considered statistically significant. 
+
+
+B) 
+```{r}
+
+hx_depression_model <- glm(HX_SUICIDE ~ CESDR_TOTAL_SUM,
+                           data = rip,
+                           family = binomial)
+
+summary(hx_depression_model)
+
+library(broom)
+tidy(hx_depression_model, exponentiate = TRUE, conf.int = TRUE)
+
+library(ResourceSelection)
+hoslem.test(rip$HX_SUICIDE, fitted(hx_depression_model), g=10)
+
+
+library(ggplot2)
+
+rip$predicted <- predict(hx_depression_model, type = "response")
+
+ggplot(rip, aes(x = CESDR_TOTAL_SUM, y = HX_SUICIDE)) +
+  geom_jitter(height = 0.05, alpha = 0.5) +
+  geom_smooth(method = "glm", method.args = list(family = "binomial"), color = "blue") +
+  labs(title = "Predicted Probability of History of Suicide by Depression Score",
+       x = "CESD-R Total Score",
+       y = "Probability of HX_SUICIDE") +
+  theme_minimal()
+
+```
+When comparing suicide on depression, the results show us that higher depression scores were correlated with having a history of committing suicide. For every 1 point increase of the CESDR scores, there is a 6% increase in the chances of having history of suicide. These results are statistically significant. 
+
+
+
+C)
+```{r}
+aces_model <- glm(
+  HX_SUICIDE ~ ACES___1 + ACES___2 + ACES___3 + ACES___4 + ACES___5 +
+               ACES___6 + ACES___7 + ACES___8 + ACES___9 + ACES___10,
+  data = rip,
+  family = binomial
+)
+
+summary(aces_model)
+
+
+par(mfrow=c(1,2))
+plot(aces_model)
+
+
+library(car)
+vif(aces_model)
+
+library(ResourceSelection)
+hoslem.test(rip$HX_SUICIDE, fitted(aces_model), g = 10)
+
+rip$predicted <- predict(aces_model, type = "response")
+
+rip$ACE_TOTAL <- rowSums(rip[aces_vars] == "Yes")
+
+library(dplyr)
+library(ggplot2)
+
+plot_data <- rip %>%
+  group_by(ACE_TOTAL) %>%
+  summarise(mean_pred = mean(predicted, na.rm = TRUE))
+
+
+plot_data
+
+
+rip$ACE_TOTAL <- as.numeric(rip$ACE_TOTAL)
+
+plot_data <- aggregate(predicted ~ ACE_TOTAL, data = rip, FUN = mean)
+
+
+plot(plot_data$ACE_TOTAL, plot_data$predicted,
+     type = "b",                    
+     pch = 19,                       
+     col = "blue",
+     xlab = "Total ACEs",
+     ylab = "Predicted Probability of HX_SUICIDE",
+     main = "Predicted Probability by Total ACEs",
+     ylim = c(0, 1))                 
+points(plot_data$ACE_TOTAL, plot_data$predicted, pch = 16, col = "red", cex = 1.5)
+lines(plot_data$ACE_TOTAL, plot_data$predicted, col = "blue", lwd = 2)
+
+
+```
+When comparing HX Suicide to the ACES variables, our results show us that ACES 2 (sexual abuse), ACES 8 (household mental illness) and ACES 3 (emotional abuse) were all strong indicators of individuals having a higher risk of reporting suicide. ACES 2 had the highest significance with a p value of 6.18e-06. Majority of the other ACES were not great predictors of individuals having a higher risk of reporting suicide.
+
+D)
+
+
+```{r}
+
+final_model <- glm(HX_SUICIDE ~ ETHNICITY + RACE + INCOME +
+                   CESDR_TOTAL_SUM + ACES___2 + ACES___3 + ACES___8 + ACES___9,
+                   family = binomial, data = rip)
+
+library(broom)
+library(dplyr)
+
+
+final_table <- tidy(final_model) %>%
+  mutate(
+    OR = exp(estimate),                        
+    lower_CI = exp(estimate - 1.96 * std.error),
+    upper_CI = exp(estimate + 1.96 * std.error),
+    p_value = round(p.value, 3)
+  ) %>%
+  select(term, OR, lower_CI, upper_CI, p_value)
+
+library(broom)
+library(dplyr)
+
+
+final_table <- tidy(final_model, conf.int = TRUE, exponentiate = TRUE) %>%
+  select(Term = term, OR = estimate, `95% CI Lower` = conf.low, `95% CI Upper` = conf.high, `p-value` = p.value)
+library(broom)
+library(dplyr)
+
+
+final_table <- tidy(final_model, conf.int = TRUE, exponentiate = TRUE) %>%
+  select(Term = term, OR = estimate, `95% CI Lower` = conf.low, `95% CI Upper` = conf.high, `p-value` = p.value)
+
+final_table <- final_table %>%
+  mutate(Term = case_when(
+    Term == "(Intercept)" ~ "(Intercept)",
+    Term == "ETHNICITYHispanic/Latino" ~ "ETHNICITY: Hispanic/Latino",
+    Term == "RACEOther" ~ "RACE: Other",
+    Term == "INCOME30to50k" ~ "INCOME: 30–50k",
+    Term == "INCOME51to75k" ~ "INCOME: 51–75k",
+    Term == "INCOME76to100k" ~ "INCOME: 76–100k",
+    Term == "INCOME>100k" ~ "INCOME: >100k",
+    Term == "CESDR_TOTAL_SUM" ~ "CESDR Total Score",
+    Term == "ACES___2" ~ "ACE 2",
+    Term == "ACES___3" ~ "ACE 3",
+    Term == "ACES___8" ~ "ACE 8",
+    Term == "ACES___9" ~ "ACE 9",
+    TRUE ~ Term
+  ))
+
+
+
+final_table <- final_table %>%
+  mutate(across(c(OR, `95% CI Lower`, `95% CI Upper`), ~ round(.x, 2)),
+         `p-value` = signif(`p-value`, 3))
+
+
+final_table
+
+library(flextable)
+flextable(final_table)
+
+
+```
+
+E)
+```{r}
+
+library(car)
+
+
+vif(final_model)
+
+
+summary(final_model)
+
+
+par(mfrow = c(1,1))
+plot(final_model)
+
+```
+
+The final model I created shows that high CESDR scores (high depression), ACES 2(sexual abuse), 8 (household mental illness) and ACES 9 (Parental separation or divorce) are high indicators of history of suicide. Income did not represent a statistically significant prediction of suicide. The Hispanic/latino ethnicity also indicated a higher history of suicide, but was less significant than depression or the ACE variables. 
+
+
+#QUESTION 3
+
+A) 
+Significant independent variable from 1d: CESDR_TOTAL_SUM
+Significant independent variable from 2d: ACES 2
+Measure of effect:
+
+```{r}
+
+library(dplyr)
+library(flextable)
+
+
+summary_table <- tibble(
+  Model = c("SABCS_TOTAL_SUM (Linear)", "HX_SUICIDE (Logistic)"),
+  Variable = c("CESDR_TOTAL_SUM", "ACES 2: Yes"),
+  Effect = c("β = 0.185", "OR = 2.17"),
+  CI_or_SE = c("SE = 0.01266", "95% CI: 1.00–4.72"),
+  p_value = c("< 0.001", "0.049"),
+  Interpretation = c(
+    "Higher depressive symptoms are associated with higher suicidal risk scores.",
+    "Experiencing ACES 2 is linked to ~2.2 times higher odds of history of suicide."
+  )
+)
+
+
+ft <- flextable(summary_table) %>%
+  autofit() %>%
+  bold(j = 1, bold = TRUE) %>%
+  bold(j = 2, bold = TRUE)
+
+
+ft
+
+
+```
+
+In our interpretation for the respective corresponding measure of effects for each independent variable, we can conclude that depression symptoms are highly associated with suicide risk. For every 1 point increase in depression scores there is a 0.18 increase in suicidal risk. We can also see that exposure to ACES 2 (sexual abuse) also increases the chances in having a history of suicide because participants were inclined to have a 2.2 times higher odds. 
+
+
+B)
+Nonsignificant independent variable from 1d: Income >$100,000
+Nonsignificant independent variable from 2d: Income 51- 75k
+
+```{r}
+
+library(dplyr)
+library(flextable)
+
+
+ns_table <- tibble(
+  Model = c("SABCS_TOTAL_SUM (Linear)", "HX_SUICIDE (Logistic)"),
+  Variable = c("INCOME > $100,000", "INCOME: 51–75k"),
+  Effect = c("β = 0.054", "OR = 0.97"),
+  CI_or_SE = c("SE = 0.517", "95% CI: 0.34–2.70"),
+  p_value = c("0.917", "0.955"),
+  Interpretation = c(
+    "No significant association between high income and suicidal risk score.",
+    "No significant association between income $51–75k and history of suicide."
+  )
+)
+
+
+ft_ns <- flextable(ns_table) %>%
+  autofit() %>%
+  bold(j = 1, bold = TRUE) %>%
+  bold(j = 2, bold = TRUE)
+
+ft_ns
+
+
+
+```
+From this model we can see that people with an income of over 100,000 did not have a large difference of suicide risk compared to the other groups. People with a mid income of $51,000- 75,000 did not have a significant link to suicide risk as well. The income category is not likely linked to high suicide risk. 
+
+#QUESTION 4
+
+A) This analysis mostly resembles a cross sectional study. All of the variables measured (Suicide history, depression, ACES and demographics) are measured during a single point in time. The outcomes of either suicide history or depression are assessed simultaneously. 
+
+B) One limitation in this study is that because this is a cross sectional study, we are not able to prove cause and effect. This is because all variables are measured at the same time. 
+
+C) In order to minimize this limitation, we could rerun this study and design it as a prospective cohort study. The study subjects would be assessed for the same variables we used at the beginning, and the variables would then be tracked over time. Tracking them over time would allow us to determine the development process of these suicidal behaviors and what may change or cause the variables to vary.
+
+
+
